@@ -1,0 +1,74 @@
+STATISTICS NOTES FOR DATA SCIENCE
+
+1.  Introduction to Statistics Statistics is the science of collecting,
+    analyzing, interpreting, and presenting data. Two main types:
+
+-   Descriptive Statistics: Summarizes data (mean, median, mode, etc.)
+-   Inferential Statistics: Makes predictions or inferences about a
+    population from a sample.
+
+2.  Types of Data
+
+-   Qualitative (Categorical): Non-numeric (e.g., gender, color)
+-   Quantitative (Numerical): Numeric
+    -   Discrete: Countable (e.g., number of students)
+    -   Continuous: Measurable (e.g., height, weight)
+
+3.  Measures of Central Tendency
+
+-   Mean: Average value
+-   Median: Middle value
+-   Mode: Most frequent value
+
+4.  Measures of Dispersion
+
+-   Range: Max - Min
+-   Variance: Spread of data
+-   Standard Deviation: Square root of variance
+
+5.  Probability Basics Probability = Favorable outcomes / Total outcomes
+
+-   Independent events
+-   Conditional probability
+
+6.  Distributions
+
+-   Normal Distribution (Gaussian)
+-   Binomial Distribution
+-   Poisson Distribution
+
+7.  Sampling
+
+-   Random Sampling
+-   Stratified Sampling
+-   Systematic Sampling
+
+8.  Hypothesis Testing
+
+-   Null Hypothesis (H0)
+-   Alternative Hypothesis (H1)
+-   p-value
+-   Significance level (alpha)
+
+9.  Correlation vs Causation
+
+-   Correlation: Relationship between variables
+-   Causation: One variable causes another
+
+10. Regression
+
+-   Linear Regression
+-   Logistic Regression
+
+11. Bayes Theorem P(A|B) = [P(B|A) * P(A)] / P(B)
+
+12. Central Limit Theorem The sampling distribution of the mean
+    approaches normal distribution as sample size increases.
+
+13. Key Terms
+
+-   Population vs Sample
+-   Bias and Variance
+-   Overfitting and Underfitting
+
+End of Notes
