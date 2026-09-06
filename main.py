@@ -22,7 +22,7 @@ retriever = vectorstore.as_retriever(
     }
 )
 
-llm = ChatMistralAI(model = "mistral-small-2506")
+llm = ChatMistralAI(model = "ministral-8b-latest")
 
 #prompt template 
 prompt = ChatPromptTemplate.from_messages(
