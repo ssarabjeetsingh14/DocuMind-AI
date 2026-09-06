@@ -10,7 +10,7 @@ from langchain_mistralai import (
 )
 
 # Standalone Chroma integration
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import Chroma
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.memory import ConversationBufferMemory
