@@ -77,7 +77,7 @@ if st.session_state.vectorstore:
     )
 
     llm = ChatMistralAI(
-        model="mistral-small-2506",
+        model="ministral-8b-latest",
         temperature=temperature
     )
 
