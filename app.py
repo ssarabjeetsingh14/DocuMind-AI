@@ -1,57 +1,71 @@
-
 import streamlit as st
-import os
-import shutil
 from dotenv import load_dotenv
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_mistralai import MistralAIEmbeddings, ChatMistralAI
-from langchain_community.vectorstores import Chroma
+
+from langchain_mistralai import (
+    MistralAIEmbeddings,
+    ChatMistralAI
+)
+
+# Standalone Chroma integration
+from langchain_chroma import Chroma
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.memory import ConversationBufferMemory
 
 
-# ----------------- SETUP -----------------
+# =========================================================
+# SETUP
+# =========================================================
 
 load_dotenv()
 
 st.set_page_config(
     page_title="DocuMind AI",
+    page_icon="📚",
     layout="wide"
 )
 
 st.title("📚 DocuMind AI – Chat with Your PDF")
 
 
-# ----------------- SIDEBAR -----------------
+# =========================================================
+# SIDEBAR
+# =========================================================
 
 with st.sidebar:
+
     st.header("⚙️ Settings")
 
     chunk_size = st.slider(
         "Chunk Size",
-        500,
-        2000,
-        1000
+        min_value=500,
+        max_value=2000,
+        value=1000,
+        step=100
     )
 
     k = st.slider(
         "Top K Results",
-        1,
-        10,
-        4
+        min_value=1,
+        max_value=10,
+        value=4
     )
 
     temperature = st.slider(
         "LLM Temperature",
-        0.0,
-        1.0,
-        0.3
+        min_value=0.0,
+        max_value=1.0,
+        value=0.3,
+        step=0.1
     )
 
 
-# ----------------- SESSION STATE -----------------
+# =========================================================
+# SESSION STATE
+# =========================================================
 
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
@@ -64,8 +78,19 @@ if "memory" not in st.session_state:
         return_messages=True
     )
 
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
 
-# ----------------- FILE UPLOAD -----------------
+if "uploaded_file_size" not in st.session_state:
+    st.session_state.uploaded_file_size = None
+
+if "chunk_size" not in st.session_state:
+    st.session_state.chunk_size = None
+
+
+# =========================================================
+# FILE UPLOAD
+# =========================================================
 
 uploaded_file = st.file_uploader(
     "Upload your PDF",
@@ -75,83 +100,182 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    # Save uploaded PDF
-    with open("temp.pdf", "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    current_file_name = uploaded_file.name
+    current_file_size = uploaded_file.size
 
-    st.success("✅ PDF uploaded!")
-
-    with st.spinner("🔄 Processing PDF..."):
-
-        # ----------------- LOAD PDF -----------------
-
-        loader = PyPDFLoader("temp.pdf")
-        docs = loader.load()
-
-        # Remove empty pages
-        docs = [
-            doc for doc in docs
-            if isinstance(doc.page_content, str)
-            and doc.page_content.strip()
-        ]
-
-        # ----------------- SPLIT TEXT -----------------
-
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=200
-        )
-
-        chunks = splitter.split_documents(docs)
-
-        # Remove empty chunks
-        chunks = [
-            chunk for chunk in chunks
-            if isinstance(chunk.page_content, str)
-            and chunk.page_content.strip()
-        ]
-
-        if not chunks:
-            st.error(
-                "❌ No readable text was found in this PDF."
-            )
-            st.stop()
-
-        # ----------------- EMBEDDINGS -----------------
-
-        embedding_model = MistralAIEmbeddings(
-            model="mistral-embed"
-        )
-
-        # ----------------- CREATE NEW CHROMA DB -----------------
-
-        # Delete old database to prevent incompatible/stale data
-        if os.path.exists("chroma_db"):
-            shutil.rmtree("chroma_db")
-
-        vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embedding_model,
-            persist_directory="chroma_db"
-        )
-
-        st.session_state.vectorstore = vectorstore
-
-        # Reset chat for new PDF
-        st.session_state.messages = []
-
-        st.session_state.memory = ConversationBufferMemory(
-            return_messages=True
-        )
-
-    st.success(
-        f"✅ Database ready! {len(chunks)} chunks created."
+    file_changed = (
+        st.session_state.uploaded_file_name
+        != current_file_name
+        or
+        st.session_state.uploaded_file_size
+        != current_file_size
+        or
+        st.session_state.chunk_size
+        != chunk_size
     )
 
 
-# ----------------- CHAT UI -----------------
+    # =====================================================
+    # PROCESS PDF ONLY WHEN NECESSARY
+    # =====================================================
+
+    if file_changed:
+
+        with st.spinner(
+            "🔄 Processing PDF and creating embeddings..."
+        ):
+
+            try:
+
+                # -----------------------------------------
+                # SAVE TEMP PDF
+                # -----------------------------------------
+
+                pdf_path = "temp.pdf"
+
+                with open(pdf_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+
+                # -----------------------------------------
+                # LOAD PDF
+                # -----------------------------------------
+
+                loader = PyPDFLoader(pdf_path)
+
+                docs = loader.load()
+
+
+                # -----------------------------------------
+                # REMOVE EMPTY PAGES
+                # -----------------------------------------
+
+                docs = [
+                    doc
+                    for doc in docs
+                    if isinstance(doc.page_content, str)
+                    and doc.page_content.strip()
+                ]
+
+
+                if not docs:
+
+                    st.error(
+                        "❌ No readable text was found in this PDF."
+                    )
+
+                    st.stop()
+
+
+                # -----------------------------------------
+                # TEXT SPLITTER
+                # -----------------------------------------
+
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=chunk_size,
+                    chunk_overlap=200
+                )
+
+                chunks = splitter.split_documents(docs)
+
+
+                # -----------------------------------------
+                # REMOVE EMPTY CHUNKS
+                # -----------------------------------------
+
+                chunks = [
+                    chunk
+                    for chunk in chunks
+                    if isinstance(chunk.page_content, str)
+                    and chunk.page_content.strip()
+                ]
+
+
+                if not chunks:
+
+                    st.error(
+                        "❌ No text chunks were created."
+                    )
+
+                    st.stop()
+
+
+                # -----------------------------------------
+                # EMBEDDING MODEL
+                # -----------------------------------------
+
+                embedding_model = MistralAIEmbeddings(
+                    model="mistral-embed"
+                )
+
+
+                # -----------------------------------------
+                # CREATE IN-MEMORY CHROMA DATABASE
+                # -----------------------------------------
+
+                vectorstore = Chroma.from_documents(
+                    documents=chunks,
+                    embedding=embedding_model,
+                    collection_name="documind_collection"
+                )
+
+
+                # -----------------------------------------
+                # SAVE TO SESSION STATE
+                # -----------------------------------------
+
+                st.session_state.vectorstore = vectorstore
+
+                st.session_state.uploaded_file_name = (
+                    current_file_name
+                )
+
+                st.session_state.uploaded_file_size = (
+                    current_file_size
+                )
+
+                st.session_state.chunk_size = chunk_size
+
+
+                # -----------------------------------------
+                # RESET CHAT
+                # -----------------------------------------
+
+                st.session_state.messages = []
+
+                st.session_state.memory = (
+                    ConversationBufferMemory(
+                        return_messages=True
+                    )
+                )
+
+
+                st.success(
+                    f"✅ PDF processed successfully! "
+                    f"{len(chunks)} chunks created."
+                )
+
+
+            except Exception as e:
+
+                st.error(
+                    "❌ Error while processing the PDF."
+                )
+
+                st.exception(e)
+
+                st.stop()
+
+
+# =========================================================
+# CHAT
+# =========================================================
 
 if st.session_state.vectorstore:
+
+    # =====================================================
+    # RETRIEVER
+    # =====================================================
 
     retriever = st.session_state.vectorstore.as_retriever(
         search_type="mmr",
@@ -162,14 +286,20 @@ if st.session_state.vectorstore:
         }
     )
 
-    # ----------------- LLM -----------------
+
+    # =====================================================
+    # MISTRAL LLM
+    # =====================================================
 
     llm = ChatMistralAI(
         model="ministral-8b-latest",
         temperature=temperature
     )
 
-    # ----------------- PROMPT -----------------
+
+    # =====================================================
+    # PROMPT
+    # =====================================================
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -180,12 +310,17 @@ if st.session_state.vectorstore:
 Use ONLY the provided context to answer the question.
 
 If the answer cannot be found in the context, say:
+
 "I could not find the answer in the document."
 
-Do not make up information."""
+Do not make up information.
+"""
             ),
 
-            ("placeholder", "{history}"),
+            (
+                "placeholder",
+                "{history}"
+            ),
 
             (
                 "human",
@@ -200,24 +335,40 @@ Question:
         ]
     )
 
+
+    # =====================================================
+    # MEMORY
+    # =====================================================
+
     memory = st.session_state.memory
 
 
-    # ----------------- DISPLAY CHAT HISTORY -----------------
+    # =====================================================
+    # DISPLAY PREVIOUS MESSAGES
+    # =====================================================
 
     for msg in st.session_state.messages:
 
         with st.chat_message(msg["role"]):
+
             st.markdown(msg["content"])
 
 
-    # ----------------- USER INPUT -----------------
+    # =====================================================
+    # USER INPUT
+    # =====================================================
 
-    if user_input := st.chat_input(
+    user_input = st.chat_input(
         "Ask something about your PDF..."
-    ):
+    )
 
-        # Show user message
+
+    if user_input:
+
+        # -----------------------------------------------
+        # DISPLAY USER MESSAGE
+        # -----------------------------------------------
+
         st.session_state.messages.append(
             {
                 "role": "user",
@@ -226,10 +377,13 @@ Question:
         )
 
         with st.chat_message("user"):
+
             st.markdown(user_input)
 
 
-        # ----------------- RETRIEVE DOCUMENTS -----------------
+        # -----------------------------------------------
+        # RETRIEVE DOCUMENTS
+        # -----------------------------------------------
 
         try:
 
@@ -246,25 +400,40 @@ Question:
             st.stop()
 
 
-        # ----------------- CREATE CONTEXT -----------------
+        # -----------------------------------------------
+        # FILTER VALID DOCUMENTS
+        # -----------------------------------------------
+
+        valid_docs = [
+            doc
+            for doc in docs
+            if isinstance(doc.page_content, str)
+            and doc.page_content.strip()
+        ]
+
+
+        # -----------------------------------------------
+        # CREATE CONTEXT
+        # -----------------------------------------------
 
         context = "\n\n".join(
-            [
-                doc.page_content
-                for doc in docs
-                if isinstance(doc.page_content, str)
-            ]
+            doc.page_content
+            for doc in valid_docs
         )
 
 
-        # ----------------- GET HISTORY -----------------
+        # -----------------------------------------------
+        # GET CONVERSATION HISTORY
+        # -----------------------------------------------
 
         history = memory.load_memory_variables({})[
             "history"
         ]
 
 
-        # ----------------- CREATE PROMPT -----------------
+        # -----------------------------------------------
+        # CREATE FINAL PROMPT
+        # -----------------------------------------------
 
         final_prompt = prompt.invoke(
             {
@@ -275,7 +444,9 @@ Question:
         )
 
 
-        # ----------------- GET RESPONSE -----------------
+        # -----------------------------------------------
+        # CALL MISTRAL
+        # -----------------------------------------------
 
         try:
 
@@ -292,37 +463,81 @@ Question:
             st.stop()
 
 
-        # ----------------- SAVE MEMORY -----------------
+        # -----------------------------------------------
+        # SAVE MEMORY
+        # -----------------------------------------------
 
         memory.save_context(
-            {"input": user_input},
-            {"output": response.content}
+            {
+                "input": user_input
+            },
+            {
+                "output": response.content
+            }
         )
 
 
-        # ----------------- SHOW RESPONSE -----------------
+        # -----------------------------------------------
+        # DISPLAY AI RESPONSE
+        # -----------------------------------------------
 
         with st.chat_message("assistant"):
 
             st.markdown(response.content)
 
 
-            # ----------------- SOURCES -----------------
+            # -------------------------------------------
+            # SOURCES
+            # -------------------------------------------
 
             with st.expander("📌 Sources"):
 
-                for i, doc in enumerate(docs):
+                if valid_docs:
+
+                    for i, doc in enumerate(
+                        valid_docs,
+                        start=1
+                    ):
+
+                        page = doc.metadata.get(
+                            "page",
+                            None
+                        )
+
+                        if isinstance(page, int):
+
+                            source_title = (
+                                f"Source {i} — "
+                                f"Page {page + 1}"
+                            )
+
+                        else:
+
+                            source_title = (
+                                f"Source {i}"
+                            )
+
+
+                        st.write(
+                            f"**{source_title}**"
+                        )
+
+                        st.write(
+                            doc.page_content[:500]
+                            + "..."
+                        )
+
+                else:
 
                     st.write(
-                        f"**Source {i + 1}:**"
-                    )
-
-                    st.write(
-                        doc.page_content[:300] + "..."
+                        "No sources were retrieved."
                     )
 
 
-        # Save assistant message
+        # -----------------------------------------------
+        # SAVE AI MESSAGE
+        # -----------------------------------------------
+
         st.session_state.messages.append(
             {
                 "role": "assistant",
@@ -330,6 +545,10 @@ Question:
             }
         )
 
+
+# =========================================================
+# NO PDF
+# =========================================================
 
 else:
 
