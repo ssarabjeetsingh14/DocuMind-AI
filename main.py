@@ -7,7 +7,7 @@ from langchain_mistralai import (
 )
 
 # Use the standalone Chroma integration
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import Chroma
 
 from langchain_core.prompts import ChatPromptTemplate
 
