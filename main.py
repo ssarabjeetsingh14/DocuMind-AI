@@ -6,31 +6,42 @@ from langchain_mistralai import (
     ChatMistralAI
 )
 
-from langchain_community.vectorstores import Chroma
+# Use the standalone Chroma integration
+from langchain_chroma import Chroma
+
 from langchain_core.prompts import ChatPromptTemplate
 
 
-# ----------------- LOAD ENV -----------------
+# =========================================================
+# LOAD ENVIRONMENT VARIABLES
+# =========================================================
 
 load_dotenv()
 
 
-# ----------------- EMBEDDING MODEL -----------------
+# =========================================================
+# EMBEDDING MODEL
+# =========================================================
 
 embedding_model = MistralAIEmbeddings(
     model="mistral-embed"
 )
 
 
-# ----------------- LOAD CHROMA DATABASE -----------------
+# =========================================================
+# LOAD CHROMA DATABASE
+# =========================================================
 
 vectorstore = Chroma(
+    collection_name="documind_collection",
     persist_directory="chroma_db",
     embedding_function=embedding_model
 )
 
 
-# ----------------- RETRIEVER -----------------
+# =========================================================
+# RETRIEVER
+# =========================================================
 
 retriever = vectorstore.as_retriever(
     search_type="mmr",
@@ -42,7 +53,9 @@ retriever = vectorstore.as_retriever(
 )
 
 
-# ----------------- LLM -----------------
+# =========================================================
+# MISTRAL LLM
+# =========================================================
 
 llm = ChatMistralAI(
     model="ministral-8b-latest",
@@ -50,7 +63,9 @@ llm = ChatMistralAI(
 )
 
 
-# ----------------- PROMPT -----------------
+# =========================================================
+# PROMPT
+# =========================================================
 
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -60,14 +75,14 @@ prompt = ChatPromptTemplate.from_messages(
 
 Use ONLY the provided context to answer the question.
 
-If the answer is not present in the context,
-say:
+If the answer is not present in the context, say:
 
 "I could not find the answer in the document."
 
 Do not make up information.
 """
         ),
+
         (
             "human",
             """Context:
@@ -83,24 +98,40 @@ Question:
 )
 
 
-# ----------------- RAG SYSTEM READY -----------------
+# =========================================================
+# RAG SYSTEM READY
+# =========================================================
 
-print("RAG system created successfully!")
-print("Press 0 to exit.")
+print("=" * 60)
+print("📚 DocuMind AI")
+print("=" * 60)
+print("✅ RAG system created successfully!")
+print("Type 0 to exit.")
+print("=" * 60)
 
 
-# ----------------- CHAT LOOP -----------------
+# =========================================================
+# CHAT LOOP
+# =========================================================
 
 while True:
 
-    query = input("\nYou: ")
+    query = input("\nYou: ").strip()
 
+    # Exit
     if query == "0":
-        print("Goodbye!")
+        print("\nGoodbye! 👋")
         break
 
+    # Empty input
+    if not query:
+        print("Please enter a question.")
+        continue
 
-    # ----------------- RETRIEVE -----------------
+
+    # =====================================================
+    # RETRIEVE DOCUMENTS
+    # =====================================================
 
     try:
 
@@ -109,22 +140,58 @@ while True:
     except Exception as e:
 
         print("\n❌ Error while retrieving documents:")
+        print(type(e).__name__)
         print(e)
-        break
+
+        continue
 
 
-    # ----------------- CREATE CONTEXT -----------------
+    # =====================================================
+    # CHECK RETRIEVAL
+    # =====================================================
+
+    if not docs:
+
+        print(
+            '\nAI: I could not find the answer in the document.'
+        )
+
+        continue
+
+
+    # =====================================================
+    # CREATE CONTEXT
+    # =====================================================
+
+    valid_docs = [
+        doc
+        for doc in docs
+        if isinstance(doc.page_content, str)
+        and doc.page_content.strip()
+    ]
 
     context = "\n\n".join(
-        [
-            doc.page_content
-            for doc in docs
-            if isinstance(doc.page_content, str)
-        ]
+        doc.page_content
+        for doc in valid_docs
     )
 
 
-    # ----------------- CREATE PROMPT -----------------
+    # =====================================================
+    # CHECK CONTEXT
+    # =====================================================
+
+    if not context.strip():
+
+        print(
+            '\nAI: I could not find the answer in the document.'
+        )
+
+        continue
+
+
+    # =====================================================
+    # CREATE FINAL PROMPT
+    # =====================================================
 
     final_prompt = prompt.invoke(
         {
@@ -134,7 +201,9 @@ while True:
     )
 
 
-    # ----------------- CALL LLM -----------------
+    # =====================================================
+    # CALL MISTRAL
+    # =====================================================
 
     try:
 
@@ -143,11 +212,30 @@ while True:
     except Exception as e:
 
         print("\n❌ Error while calling Mistral:")
+        print(type(e).__name__)
         print(e)
+
         continue
 
 
-    # ----------------- RESPONSE -----------------
+    # =====================================================
+    # DISPLAY RESPONSE
+    # =====================================================
 
     print(f"\nAI: {response.content}")
+
+
+    # =====================================================
+    # DISPLAY SOURCES
+    # =====================================================
+
+    print("\n📌 Sources:")
+
+    for i, doc in enumerate(valid_docs, start=1):
+
+        page = doc.metadata.get("page", "Unknown")
+
+        print(
+            f"  Source {i} | Page: {page + 1 if isinstance(page, int) else page}"
+        )
 ```
