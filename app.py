@@ -336,4 +336,3 @@ else:
     st.info(
         "👆 Upload a PDF to start chatting."
     )
-```
